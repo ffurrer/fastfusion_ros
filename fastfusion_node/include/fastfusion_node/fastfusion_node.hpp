@@ -25,7 +25,7 @@
 #include <message_filters/time_synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
 #include <pcl/io/ply_io.h>
-
+#include <pcl/features/integral_image_normal.h>
 
 class FastFusionWrapper {
 public:
@@ -39,6 +39,7 @@ protected:
 	void imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth, const sensor_msgs::ImageConstPtr& msgConf,
 			const sensor_msgs::ImageConstPtr& msgNoise);
 	void imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth, const sensor_msgs::ImageConstPtr& msgConf);
+	void pclCallbackPico(const sensor_msgs::PointCloud2 msgPtCloud, const sensor_msgs::ImageConstPtr& msgNoise);
 	void pclCallback(sensor_msgs::PointCloud2 pcl_msg);
 	void getRGBImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgRGB, cv::Mat *rgbImg);
 	void getConfImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgConf, cv::Mat *confImg);

@@ -222,6 +222,56 @@ void FastFusionWrapper::run() {
 	ros::shutdown();
 }
 
+void FastFusionWrapper::pclCallbackPico(const sensor_msgs::PointCloud2 msgPtCloud,
+										const sensor_msgs::ImageConstPtr& msgNoise) {
+//-- Callbackfunction for the use of the ToF camera. Using directly the published point cloud
+//-- along with the published noise image (32bit float).
+	//-- Get time stamp of the incoming messages
+	ros::Time timestamp = msgPtCloud->header.stamp;
+
+	//-- Reject Data if too little time since last frame
+	if ((timestamp - previous_ts_).toSec() <= 0.05){
+		return;
+	}
+	previous_ts_ = timestamp;
+
+	//-- Broadcast TF msgs for constant transformations
+	broadcastTFchain(timestamp);
+
+	//-- Extract Messages
+	cv::Mat imgNoiseDist;
+	pcl::PointCloud<pcl::PointXYZ>Ptr ptCloud(new pcl::PointCloud<pcl::PointXYZ> ());
+	pcl::fromROSMsg (msgPtCloud,*ptCloud);
+	getNoiseImageFromRosMsg(msgNoise, &imgNoiseDist);
+
+	// Create Dummy RGB Frame
+	cv::Mat imgRGB(imgNoiseDist.rows, imgNoiseDist.cols, CV_8UC3, CV_RGB(200,200,200));
+
+	//-- Compute Image Normals (via integral images)
+	pcl::PointCloud<pcl::Normal>::Ptr ptCloudNormals (new pcl::PointCloud<pcl::Normal>);
+	pcl::IntegralImageNormalEstimation<pcl::PointXYZ, pcl::Normal> normalEstimator;
+	normalEstimator.setNormalEstimationMethod (normalEstimator.COVARIANCE_MATRIX);
+	normalEstimator.setMaxDepthChangeFactor(0.02f);
+	normalEstimator.setNormalSmoothingSize(10.0f);
+	normalEstimator.setInputCloud(ptCloud);
+	normalEstimator.compute(*ptCloudNormals);
+
+	//-- Get Pose (tf-listener)
+	tf::StampedTransform transform;
+	try{
+		ros::Time nowTime = ros::Time::now();
+		tfListener.waitForTransform(world_id_, cam_id_,
+				timestamp, ros::Duration(2.0));
+		tfListener.lookupTransform(world_id_, cam_id_,
+				timestamp, transform);
+	}
+	catch (tf::TransformException ex){
+		ROS_ERROR("%s",ex.what());
+		ros::Duration(1.0).sleep();
+		return;
+	}
+}
+
 
 void FastFusionWrapper::imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth,
 										  const sensor_msgs::ImageConstPtr& msgConf,
