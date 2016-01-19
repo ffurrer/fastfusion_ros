@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="ISO-8859-15"?>
 <launch>
-	<arg name="slam_name" value="/picoflexx/cam0"/>
+	<arg name="camera_prefix" value="/picoflexx/cam0"/>
 	
 	<!-- Run Bagfile -->
      <node pkg="rosbag" type="play" name="player" output="screen"   
@@ -15,9 +15,10 @@
 	<!-- Run fastfusion_node-->
 
 	<node  name="fastfusion_node" pkg="fastfusion_node" type="fastfusion_node" clear_params="true" output="screen" >
-		<remap from="image_depth"		to="$(arg slam_name)/depth/image_raw" />
-		<remap from="image_conf"		to="$(arg slam_name)/confidence/image_raw" />
-		<remap from="image_noise" 		to="$(arg slam_name)/noise/image_raw" />
+		<remap from="image_depth"		to="$(arg camera_prefix)/depth/image_raw" />
+		<remap from="image_conf"		to="$(arg camera_prefix)/confidence/image_raw" />
+		<remap from="image_noise" 		to="$(arg camera_prefix)/noise/image_raw" />
+		<remap from="point_cloud" 		to="$(arg camera_prefix)/pcl"/>
 
 	<!-- Load parameters -->
  	<rosparam file="$(find fastfusion_node)/cfg/params.yaml"/> 

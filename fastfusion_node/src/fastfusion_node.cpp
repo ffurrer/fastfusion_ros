@@ -182,15 +182,26 @@ void FastFusionWrapper::run() {
 		//-- Subscribe to depth image callback
 		subscriberDepth_ = new message_filters::Subscriber<sensor_msgs::Image>;
 		subscriberConfidence_ = new message_filters::Subscriber<sensor_msgs::Image>;
-		subscriberNoise_ = new message_filters::Subscriber<sensor_msgs::Image>;
 		subscriberDepth_->subscribe(node_,node_.resolveName("image_depth"),5);
 		subscriberConfidence_->subscribe(node_,node_.resolveName("image_conf"),5);
+
 		if (depth_noise_) {
+			//-- Noise image subscriber
+			subscriberNoise_ = new message_filters::Subscriber<sensor_msgs::Image>;
 			subscriberNoise_->subscribe(node_,node_.resolveName("image_noise"),5);
+
+			//-- Synchronizer for noise and depth both as images
+			/*
 			syncNoise_ = new message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Image> >
 				(message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Image>(5),
 				*subscriberDepth_,*subscriberConfidence_, *subscriberNoise_);
-			syncNoise_->registerCallback(boost::bind(&FastFusionWrapper::imageCallbackPico, this,  _1,  _2, _3));
+			syncNoise_->registerCallback(boost::bind(&FastFusionWrapper::imageCallbackPico, this,  _1,  _2, _3));*/
+
+			//-- Synchronizer for point cloud and noise image
+			subscriberPointCloud_ = new message_filters::Subscriber<sensor_msgs::PointCloud2>;
+			subscriberPointCloud_->subscribe(node_,node_.resolveName("point_cloud"),5);
+			syncPointCloud_ = new message_filters::TimeSynchronizer<sensor_msgs::PointCloud2, sensor_msgs::Image>(*subscriberPointCloud_, *subscriberDepth_,5);
+			syncPointCloud_->registerCallback(boost::bind(&FastFusionWrapper::pclCallbackPico, this,  _1,  _2));
 		} else {
 			sync_ = new message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> >
 			 	 (message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image>(5),
@@ -222,7 +233,7 @@ void FastFusionWrapper::run() {
 	ros::shutdown();
 }
 
-void FastFusionWrapper::pclCallbackPico(const sensor_msgs::PointCloud2 msgPtCloud,
+void FastFusionWrapper::pclCallbackPico(const sensor_msgs::PointCloud2ConstPtr& msgPtCloud,
 										const sensor_msgs::ImageConstPtr& msgNoise) {
 //-- Callbackfunction for the use of the ToF camera. Using directly the published point cloud
 //-- along with the published noise image (32bit float).
@@ -240,8 +251,8 @@ void FastFusionWrapper::pclCallbackPico(const sensor_msgs::PointCloud2 msgPtClou
 
 	//-- Extract Messages
 	cv::Mat imgNoiseDist;
-	pcl::PointCloud<pcl::PointXYZ>Ptr ptCloud(new pcl::PointCloud<pcl::PointXYZ> ());
-	pcl::fromROSMsg (msgPtCloud,*ptCloud);
+	pcl::PointCloud<pcl::PointXYZ>::Ptr ptCloud(new pcl::PointCloud<pcl::PointXYZ> ());
+	pcl::fromROSMsg (*msgPtCloud,*ptCloud);
 	getNoiseImageFromRosMsg(msgNoise, &imgNoiseDist);
 
 	// Create Dummy RGB Frame

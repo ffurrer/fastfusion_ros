@@ -39,7 +39,7 @@ protected:
 	void imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth, const sensor_msgs::ImageConstPtr& msgConf,
 			const sensor_msgs::ImageConstPtr& msgNoise);
 	void imageCallbackPico(const sensor_msgs::ImageConstPtr& msgDepth, const sensor_msgs::ImageConstPtr& msgConf);
-	void pclCallbackPico(const sensor_msgs::PointCloud2 msgPtCloud, const sensor_msgs::ImageConstPtr& msgNoise);
+	void pclCallbackPico(const sensor_msgs::PointCloud2ConstPtr& msgPtCloud, const sensor_msgs::ImageConstPtr& msgNoise);
 	void pclCallback(sensor_msgs::PointCloud2 pcl_msg);
 	void getRGBImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgRGB, cv::Mat *rgbImg);
 	void getConfImageFromRosMsg(const sensor_msgs::ImageConstPtr& msgConf, cv::Mat *confImg);
@@ -49,8 +49,8 @@ protected:
 	void depthImageCorrection(cv::Mat & imgDepth, cv::Mat * imgDepthCorrected);
 
 	//-- Pose Message to eigen (Rotation Matrix + Translation)
-	tf::TransformListener tfListener;
 	CameraInfo convertTFtoCameraInfo(const tf::Transform& transform);
+
 	//-- ROS node handle
 	ros::NodeHandle node_, nodeLocal_;
 	ros::Time previous_ts_;
@@ -59,15 +59,24 @@ protected:
 	cv::Mat depthCorrection_;
 	double imageScale_;
 
+	//-- Interface to fastfusion framework
 	OnlineFusionROS onlinefusion_;
+
 	//-- Subscribers
 	message_filters::Subscriber<sensor_msgs::Image> *subscriberRGB_;
 	message_filters::Subscriber<sensor_msgs::Image> *subscriberDepth_;
 	message_filters::Subscriber<sensor_msgs::Image> *subscriberNoise_;
 	message_filters::Subscriber<sensor_msgs::Image> *subscriberConfidence_;
+	message_filters::Subscriber<sensor_msgs::PointCloud2> *subscriberPointCloud_;
+
+	//-- Message Synchronizer
+	message_filters::TimeSynchronizer<sensor_msgs::PointCloud2, sensor_msgs::Image> *syncPointCloud_;
 	message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image,
 			sensor_msgs::Image> > *syncNoise_;
 	message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image,sensor_msgs::Image> > *sync_;
+
+	//-- Transformations
+	tf::TransformListener tfListener;
 	void broadcastTFchain(ros::Time timestamp);
 	tf::TransformBroadcaster tfBroadcaster_;
 	tf::Transform tf_cam0_imu;
