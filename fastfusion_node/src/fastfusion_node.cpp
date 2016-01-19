@@ -261,7 +261,7 @@ void FastFusionWrapper::pclCallbackPico(const sensor_msgs::PointCloud2ConstPtr& 
 	//-- Compute Image Normals (via integral images)
 	pcl::PointCloud<pcl::Normal>::Ptr ptCloudNormals (new pcl::PointCloud<pcl::Normal>);
 	pcl::IntegralImageNormalEstimation<pcl::PointXYZ, pcl::Normal> normalEstimator;
-	normalEstimator.setNormalEstimationMethod (normalEstimator.COVARIANCE_MATRIX);
+	normalEstimator.setNormalEstimationMethod (normalEstimator.COVARIANCE_MATRIX);	// Use Covariance Matrix method for normal estimation
 	normalEstimator.setMaxDepthChangeFactor(0.02f);
 	normalEstimator.setNormalSmoothingSize(10.0f);
 	normalEstimator.setInputCloud(ptCloud);
@@ -281,6 +281,13 @@ void FastFusionWrapper::pclCallbackPico(const sensor_msgs::PointCloud2ConstPtr& 
 		ros::Duration(1.0).sleep();
 		return;
 	}
+
+	//-- Convert tf to CameraInfo (fastfusion Class in camerautils.hpp)
+	CameraInfo incomingFramePose;
+	incomingFramePose = convertTFtoCameraInfo(transform);
+
+	//-- Push the Point Cloud into the fusion framework
+	onlinefusion_.updateFusion(*ptCloud,*ptCloudNormals,imgNoiseDist,incomingFramePose);
 }
 
 
