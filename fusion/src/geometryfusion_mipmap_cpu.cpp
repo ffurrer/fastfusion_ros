@@ -1977,7 +1977,7 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // karrerm: 20.01.2016
-int FusionMipMapCPU::addMap(const pcl::PointCloud<pcl::PointXYZRGBNormal>, const cv::Mat &noiseImg,
+int FusionMipMapCPU::addMap(const pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr ptCloud, const cv::Mat &noiseImg,
 		CameraInfo caminfo, const float scaling, const float maxcamdistance) {
 //-- addMap function for the use with input data stored as point cloud with normal information and
 //-- noise image. The function computes the distance update using the point-to-plane distance measurement.
@@ -2009,9 +2009,8 @@ int FusionMipMapCPU::addMap(const pcl::PointCloud<pcl::PointXYZRGBNormal>, const
 		_boxMin.x = _boxMin.y = _boxMin.z = 1e6;
 		_boxMax.x = _boxMax.y = _boxMax.z = -1e6;
 		fprintf(stderr,"\nComputing Initial Bounding Box");
-		computeBoundingboxIntCPU(p,depthdata,scaling,maxcamdistance,
-				depth.cols,depth.rows,_bandwidth,
-				&_boxMin.x,&_boxMin.y,&_boxMin.z,&_boxMax.x,&_boxMax.y,&_boxMax.z);
+		computeBoundingboxIntCPU(p,ptCloud ,
+				maxcamdistance,_bandwidth, &_boxMin.x,&_boxMin.y,&_boxMin.z,&_boxMax.x,&_boxMax.y,&_boxMax.z);
 
 		if(setInitialVolume(_boxMin.x,_boxMin.y,_boxMin.z,_boxMax.x,_boxMax.y,_boxMax.z)){
 			fprintf(stderr,"\nInteger Bounding Box of first frame: [%i %i %i]-[%i %i %i]",
