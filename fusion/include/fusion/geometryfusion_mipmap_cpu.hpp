@@ -127,6 +127,9 @@ public:
 	//-- Adding single image with depth noise information
 	int addMap(const cv::Mat &depth, const cv::Mat &noiseImg, CameraInfo caminfo,
 			const cv::Mat &rgb, float scaling, float maxcamdistance);
+	//-- Adding single point cloud with normals plus image with noise information
+	int addMap(const pcl::PointCloud<pcl::PointXYZRGBNormal>, const cv::Mat &noiseImg, CameraInfo caminfo,
+			const float scaling, const float maxcamdistance);
 	//Adding multiple images up to the next keyframe
 	std::vector<int> addMap(std::vector<cv::Mat> depthImages, std::vector<CameraInfo> trajectories,
 			std::vector<std::vector<cv::Mat> > rgbImages = std::vector<std::vector<cv::Mat> >(),

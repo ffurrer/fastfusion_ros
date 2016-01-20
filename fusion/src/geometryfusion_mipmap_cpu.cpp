@@ -1302,6 +1302,37 @@ void computeBoundingboxIntCPU
 	}
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+// karrerm: 20.01.2016
+void computeBoundingboxIntCPU(camPamsFloat p, const pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr ptCloud,
+		float maxcamdistance, int bandwidth,
+		int *minX, int *minY, int *minZ,
+		int *maxX, int *maxY, int *maxZ) {
+//-- Function to compute the bounding box when using the point cloud data format.
+	//-- Loop through all points to find and check if outside of boundary
+	for (int i = 0; i < ptCloud->points.size(); i++) {
+		float px = ptCloud->points[i].x;
+		float py = ptCloud->points[i].y;
+		float pz = ptCloud->points[i].z;
+		//-- Check if valid Point (w.r.t. its depth)
+		if (pz > 0.0f && pz < maxcamdistance) {
+			//-- Compute Voxel Positions
+			int vx = (int)((p.r11*px + p.r12*py + p.r13*pz + p.t1));
+			int vy = (int)((p.r21*px + p.r22*py + p.r23*pz + p.t2));
+			int vz = (int)((p.r31*px + p.r32*py + p.r33*pz + p.t3));
+			//-- Check if minimal boundary needs to be changed
+			if(*minX > vx - bandwidth) *minX = vx - bandwidth;
+			if(*minY > vy - bandwidth) *minY = vy - bandwidth;
+			if(*minZ > vz - bandwidth) *minZ = vz - bandwidth;
+			//-- Check if maximal boundary needs to be changed
+			if(*maxX < vx + bandwidth) *maxX = vx + bandwidth;
+			if(*maxY < vy + bandwidth) *maxY = vy + bandwidth;
+			if(*maxZ < vz + bandwidth) *maxZ = vz + bandwidth;
+		}
+	}
+}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 #include "traversal_wrapper_functions.cpp"
 
 
@@ -1943,6 +1974,68 @@ int FusionMipMapCPU::addMap(const cv::Mat &depth, const cv::Mat &noiseImg, Camer
 	return _nLeavesQueuedSurface;
 
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// karrerm: 20.01.2016
+int FusionMipMapCPU::addMap(const pcl::PointCloud<pcl::PointXYZRGBNormal>, const cv::Mat &noiseImg,
+		CameraInfo caminfo, const float scaling, const float maxcamdistance) {
+//-- addMap function for the use with input data stored as point cloud with normal information and
+//-- noise image. The function computes the distance update using the point-to-plane distance measurement.
+	//-- Parameter Helpers
+	cv::Mat rot = caminfo.getRotation();
+	cv::Mat trans = caminfo.getTranslation();
+	cv::Mat intr = caminfo.getIntrinsic();
+	_nLeavesBeforeLastFrame = _nLeavesUsed;
+	volumetype branchesBeforeLastFrame = _nBranchesUsed;
+	size_t meshCellsBeforeLastFrame = _meshCells.size();
+	camPamsFloat p(
+			rot.at<double>(0,0)/_scale, rot.at<double>(0,1)/_scale, rot.at<double>(0,2)/_scale,
+			rot.at<double>(1,0)/_scale, rot.at<double>(1,1)/_scale, rot.at<double>(1,2)/_scale,
+			rot.at<double>(2,0)/_scale, rot.at<double>(2,1)/_scale, rot.at<double>(2,2)/_scale,
+			(trans.at<double>(0,0) - _offset.x)/_scale,
+			(trans.at<double>(1,0) - _offset.y)/_scale,
+			(trans.at<double>(2,0) - _offset.z)/_scale,
+			intr.at<double>(0,0), intr.at<double>(1,1),
+			intr.at<double>(0,2), intr.at<double>(1,2));
+
+	//-- Empty the Data Queue
+	for(volumetype i=0;i<_nLeavesTotal;i++) _queueIndexOfLeaf[i] = MAXLEAFNUMBER;
+	_nLeavesQueuedSurface = 0;
+	_nLeavesQueuedFrustum = 0;
+
+	bool firstMap = _nLeavesUsed == 0;
+
+	if(!_n){
+		_boxMin.x = _boxMin.y = _boxMin.z = 1e6;
+		_boxMax.x = _boxMax.y = _boxMax.z = -1e6;
+		fprintf(stderr,"\nComputing Initial Bounding Box");
+		computeBoundingboxIntCPU(p,depthdata,scaling,maxcamdistance,
+				depth.cols,depth.rows,_bandwidth,
+				&_boxMin.x,&_boxMin.y,&_boxMin.z,&_boxMax.x,&_boxMax.y,&_boxMax.z);
+
+		if(setInitialVolume(_boxMin.x,_boxMin.y,_boxMin.z,_boxMax.x,_boxMax.y,_boxMax.z)){
+			fprintf(stderr,"\nInteger Bounding Box of first frame: [%i %i %i]-[%i %i %i]",
+					_boxMin.x,_boxMin.y,_boxMin.z,_boxMax.x,_boxMax.y,_boxMax.z);
+		}
+		else{
+			fprintf(stderr,"\nERROR: Initial Bounding Box Computation failed!");
+			fprintf(stderr,"\nErroneous Bounding Box of first frame: [%i %i %i]-[%i %i %i]",
+					_boxMin.x,_boxMin.y,_boxMin.z,_boxMax.x,_boxMax.y,_boxMax.z);
+		}
+		p = 	camPamsFloat(
+				rot.at<double>(0,0)/_scale, rot.at<double>(0,1)/_scale, rot.at<double>(0,2)/_scale,
+				rot.at<double>(1,0)/_scale, rot.at<double>(1,1)/_scale, rot.at<double>(1,2)/_scale,
+				rot.at<double>(2,0)/_scale, rot.at<double>(2,1)/_scale, rot.at<double>(2,2)/_scale,
+				(trans.at<double>(0,0) - _offset.x)/_scale,
+				(trans.at<double>(1,0) - _offset.y)/_scale,
+				(trans.at<double>(2,0) - _offset.z)/_scale,
+				intr.at<double>(0,0), intr.at<double>(1,1),
+				intr.at<double>(0,2), intr.at<double>(1,2));
+	}
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 int FusionMipMapCPU::addMap(const cv::Mat &depth, CameraInfo caminfo, const cv::Mat &rgb,
 		float scaling, float maxcamdistance)
