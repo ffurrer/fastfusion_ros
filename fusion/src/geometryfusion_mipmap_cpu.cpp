@@ -2032,6 +2032,35 @@ int FusionMipMapCPU::addMap(const pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr p
 				intr.at<double>(0,2), intr.at<double>(1,2));
 	}
 
+	double time1 = (double)cv::getTickCount();
+
+	_differentImageSize |= _imageWidth!=ptCloud->width || _imageHeight!=ptCloud->height;
+	if(_imageWidth!=ptCloud->width || _imageHeight!=ptCloud->height){
+		_imageWidth = ptCloud->width; _imageHeight = ptCloud->height;
+		/*
+	HERE SOME FIXING IS NECESSARY SINCE INPUT IS NOT AN IMAGE ANYMORE!!!!
+		if(_sharedBoxes) delete [] _sharedBoxes;
+		_sharedBoxes = new sidetype3[_imageWidth*_imageHeight*2];
+		if(_pxp) delete _pxp; if(_pyp) delete _pyp;
+		int alignResult = posix_memalign((void**)&_pxp,16,_imageWidth*sizeof(float));
+		alignResult += posix_memalign((void**)&_pyp,16,_imageHeight*sizeof(float));
+		if(alignResult) fprintf(stderr,"\nERROR: Aligned Alloc in addMap failed!");
+		for(int x=0;x<_imageWidth;x++){
+			_pxp[x] = ((float)x-p.cx)/p.fx;
+		}
+		for(int y=0;y<_imageHeight;y++){
+			_pyp[y] = ((float)y-p.cy)/p.fy;
+		}
+		_newBudsSinceMeshingToQueue.subtreeBuds->resize(_imageWidth*_imageHeight);
+		_newBudsSinceMeshingToQueue.subtreeBudsParentLeaf->resize(_imageWidth*_imageHeight);
+		_newBudsSinceMeshingToQueue.leafBuds->resize(_imageWidth*_imageHeight);
+		if(alignResult) fprintf(stderr,"\nERROR: Aligned Alloc in addMap failed!");
+		*/
+	}
+
+	_boxMin.x = _boxMin.y = _boxMin.z = 0;
+	_boxMax.x = _boxMax.y = _boxMax.z = _n-1;
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
