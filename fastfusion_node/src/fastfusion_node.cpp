@@ -255,9 +255,6 @@ void FastFusionWrapper::pclCallbackPico(const sensor_msgs::PointCloud2ConstPtr& 
 	pcl::fromROSMsg (*msgPtCloud,*ptCloud);
 	getNoiseImageFromRosMsg(msgNoise, &imgNoiseDist);
 
-	// Create Dummy RGB Frame
-	cv::Mat imgRGB(imgNoiseDist.rows, imgNoiseDist.cols, CV_8UC3, CV_RGB(200,200,200));
-
 	//-- Compute Image Normals (via integral images)
 	pcl::PointCloud<pcl::Normal>::Ptr ptCloudNormals (new pcl::PointCloud<pcl::Normal>);
 	pcl::IntegralImageNormalEstimation<pcl::PointXYZ, pcl::Normal> normalEstimator;
@@ -266,6 +263,25 @@ void FastFusionWrapper::pclCallbackPico(const sensor_msgs::PointCloud2ConstPtr& 
 	normalEstimator.setNormalSmoothingSize(10.0f);
 	normalEstimator.setInputCloud(ptCloud);
 	normalEstimator.compute(*ptCloudNormals);
+
+	//-- Create new point cloud in XYZRGBNormal to contain all information
+	pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr ptCloudCol(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+	ptCloudCol->height = ptCloud->height;
+	ptCloudCol->width = ptCloud->width;
+	ptCloudCol->points.resize (ptCloud->width * ptCloud->height);
+	uint8_t r = 200, g = 200, b = 200;    // Example: Red color
+	uint32_t rgb = ((uint32_t)r << 16 | (uint32_t)g << 8 | (uint32_t)b);
+	float rgbF = *reinterpret_cast<float*>(&rgb);
+	for (int i = 0; i < ptCloud->points.size(); i++) {
+		ptCloudCol->points[i].x = ptCloud->points[i].x;
+		ptCloudCol->points[i].y = ptCloud->points[i].y;
+		ptCloudCol->points[i].z = ptCloud->points[i].z;
+		ptCloudCol->points[i].rgb = rgbF;
+		ptCloudCol->points[i].normal_x = ptCloudNormals->points[i].normal_x;
+		ptCloudCol->points[i].normal_y = ptCloudNormals->points[i].normal_y;
+		ptCloudCol->points[i].normal_z = ptCloudNormals->points[i].normal_z;
+		ptCloudCol->points[i].curvature = ptCloudNormals->points[i].curvature;
+	}
 
 	//-- Get Pose (tf-listener)
 	tf::StampedTransform transform;
@@ -287,7 +303,7 @@ void FastFusionWrapper::pclCallbackPico(const sensor_msgs::PointCloud2ConstPtr& 
 	incomingFramePose = convertTFtoCameraInfo(transform);
 
 	//-- Push the Point Cloud into the fusion framework
-	onlinefusion_.updateFusion(*ptCloud,*ptCloudNormals,imgNoiseDist,incomingFramePose);
+	onlinefusion_.updateFusion(*ptCloudCol, imgNoiseDist,incomingFramePose);
 }
 
 

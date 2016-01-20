@@ -110,6 +110,9 @@ public:
 	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, CameraInfo &pose);
 	// With Noise Data
 	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &noiseImg,CameraInfo &pose);
+	// With Point cloud data and noise image
+	void updateFusion(pcl::PointCloud<pcl::PointXYZRGBNormal> ptCloud, cv::Mat &noiseImg, CameraInfo &pose);
+
 
 	bool isSetup(){ return _isSetup;};
 	bool isReady(){ return _isReady;};
@@ -151,6 +154,8 @@ protected :
 	std::queue<cv::Mat> _queueDepth;
 	std::queue<cv::Mat> _queueNoise;
 	std::queue<CameraInfo> _queuePose;
+	std::queue<pcl::PointCloud<pcl::PointXYZRGBNormal> > _queuePointCloud;
+	//std::queue<pcl::PointCloud<pcl::Normal> > _queuePointCloudNormals;
 	void fusionWrapperROS(void);
 	bool _isReady;
 
