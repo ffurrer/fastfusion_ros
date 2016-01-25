@@ -2037,10 +2037,9 @@ int FusionMipMapCPU::addMap(const pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr p
 	_differentImageSize |= _imageWidth!=ptCloud->width || _imageHeight!=ptCloud->height;
 	if(_imageWidth!=ptCloud->width || _imageHeight!=ptCloud->height){
 		_imageWidth = ptCloud->width; _imageHeight = ptCloud->height;
-		/*
-	HERE SOME FIXING IS NECESSARY SINCE INPUT IS NOT AN IMAGE ANYMORE!!!!
 		if(_sharedBoxes) delete [] _sharedBoxes;
 		_sharedBoxes = new sidetype3[_imageWidth*_imageHeight*2];
+		/*  Redundant with point cloud input
 		if(_pxp) delete _pxp; if(_pyp) delete _pyp;
 		int alignResult = posix_memalign((void**)&_pxp,16,_imageWidth*sizeof(float));
 		alignResult += posix_memalign((void**)&_pyp,16,_imageHeight*sizeof(float));
@@ -2051,16 +2050,289 @@ int FusionMipMapCPU::addMap(const pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr p
 		for(int y=0;y<_imageHeight;y++){
 			_pyp[y] = ((float)y-p.cy)/p.fy;
 		}
+		*/
 		_newBudsSinceMeshingToQueue.subtreeBuds->resize(_imageWidth*_imageHeight);
 		_newBudsSinceMeshingToQueue.subtreeBudsParentLeaf->resize(_imageWidth*_imageHeight);
 		_newBudsSinceMeshingToQueue.leafBuds->resize(_imageWidth*_imageHeight);
-		if(alignResult) fprintf(stderr,"\nERROR: Aligned Alloc in addMap failed!");
-		*/
+		//if(alignResult) fprintf(stderr,"\nERROR: Aligned Alloc in addMap failed!"); --> Redundant with point cloud input
 	}
 
 	_boxMin.x = _boxMin.y = _boxMin.z = 0;
 	_boxMax.x = _boxMax.y = _boxMax.z = _n-1;
 
+	_threadValid = true;
+	CameraInfo caminfo2 = caminfo;
+	caminfo2.setExtrinsic(caminfo2.getExtrinsicInverse());
+	cv::Mat rot2 = caminfo2.getRotation();
+	cv::Mat trans2 = caminfo2.getTranslation();
+	cv::Mat intr2 = caminfo2.getIntrinsic();
+	camPamsFloat pInv(
+			rot2.at<double>(0,0), rot2.at<double>(0,1), rot2.at<double>(0,2),
+			rot2.at<double>(1,0), rot2.at<double>(1,1), rot2.at<double>(1,2),
+			rot2.at<double>(2,0), rot2.at<double>(2,1), rot2.at<double>(2,2),
+			rot2.at<double>(0,0)*_offset.x + rot2.at<double>(0,1)*_offset.y + rot2.at<double>(0,2)*_offset.z + trans2.at<double>(0,0),
+			rot2.at<double>(1,0)*_offset.x + rot2.at<double>(1,1)*_offset.y + rot2.at<double>(1,2)*_offset.z + trans2.at<double>(1,0),
+			rot2.at<double>(2,0)*_offset.x + rot2.at<double>(2,1)*_offset.y + rot2.at<double>(2,2)*_offset.z + trans2.at<double>(2,0),
+			intr2.at<double>(0,0), intr2.at<double>(1,1),
+			intr2.at<double>(0,2), intr2.at<double>(1,2));
+
+	float m11 = pInv.r11; float m12 = pInv.r12;
+	float m13 = pInv.r13; float m14 = pInv.t1 ;
+	float m21 = pInv.r21; float m22 = pInv.r22;
+	float m23 = pInv.r23; float m24 = pInv.t2 ;
+	float m31 = pInv.r31; float m32 = pInv.r32;
+	float m33 = pInv.r33; float m34 = pInv.t3;
+
+	boost::thread *distanceUpdateThread = NULL;
+
+	if(_threaded){
+		//FIXME: Use different function able to handle point cloud data
+		distanceUpdateThread = new boost::thread(	updateWrapperInteger,SDFUpdateParameterInteger(
+				(const ushort*)depthdata, NULL, scaling, maxcamdistance, (const uchar*)rgb.data,
+				_imageWidth,_imageHeight,
+				m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
+				pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
+				_leafNumberSurface,_leafPos,_leafScale,
+				_distance,_weights,_color,_brickLength),&_nLeavesQueuedSurface,&_threadValid,0);
+	}
+	//-- Create Aligned image coordinate arrays
+	__attribute__ ((aligned (16))) float qxp1[_imageWidth*_imageHeight];
+	__attribute__ ((aligned (16))) float qxp2[_imageWidth*_imageHeight];
+	__attribute__ ((aligned (16))) float qxp3[_imageWidth*_imageHeight];
+
+	__attribute__ ((aligned (16))) float qyp1[_imageWidth*_imageHeight];
+	__attribute__ ((aligned (16))) float qyp2[_imageWidth*_imageHeight];
+	__attribute__ ((aligned (16))) float qyp3[_imageWidth*_imageHeight];
+	float depthData[_imageWidth*_imageHeight];
+	for (int i = 0; i < _imageWidth*_imageHeight; i++) {
+		qxp1[i] = p.r11*ptCloud->points[i].x;
+		qxp2[i] = p.r21*ptCloud->points[i].x;
+		qxp3[i] = p.r31*ptCloud->points[i].x;
+
+		qyp1[i] = p.r12*ptCloud->points[i].y + p.r13;
+		qyp2[i] = p.r22*ptCloud->points[i].y + p.r23;
+		qyp3[i] = p.r32*ptCloud->points[i].y + p.r33;
+
+		depthData[i] = ptCloud->points[i].z;
+	}
+//	__attribute__ ((aligned (16))) float qxp1[_imageWidth];
+//	__attribute__ ((aligned (16))) float qxp2[_imageWidth];
+//	__attribute__ ((aligned (16))) float qxp3[_imageWidth];
+	/*
+		__attribute__ ((aligned (8))) float qxp1[_imageWidth];
+		__attribute__ ((aligned (8))) float qxp2[_imageWidth];
+		__attribute__ ((aligned (8))) float qxp3[_imageWidth];
+	*/
+//	for(int x=0;x<_imageWidth;x++){
+//		qxp1[x] = p.r11*_pxp[x];
+//		qxp2[x] = p.r21*_pxp[x];
+//		qxp3[x] = p.r31*_pxp[x];
+//	}
+
+//	__attribute__ ((aligned (16))) float qyp1[_imageHeight];
+//	__attribute__ ((aligned (16))) float qyp2[_imageHeight];
+//	__attribute__ ((aligned (16))) float qyp3[_imageHeight];
+	/*
+		__attribute__ ((aligned (8))) float qyp1[_imageHeight];
+		__attribute__ ((aligned (8))) float qyp2[_imageHeight];
+		__attribute__ ((aligned (8))) float qyp3[_imageHeight];
+	*/
+//	for(int y=0;y<_imageHeight;y++){
+//		qyp1[y] = p.r12*_pyp[y] + p.r13;
+//		qyp2[y] = p.r22*_pyp[y] + p.r23;
+//		qyp3[y] = p.r32*_pyp[y] + p.r33;
+//	}
+
+	//	fprintf(stderr, "T");
+
+	#ifndef SEPARATE_MESHCELL_STRUCTURE
+	//-- Not needed since using seperate meshcell structure
+	//transformLoopSimPrecalculatedNeg_vis(qxp1,qxp2,qxp3,qyp1,qyp2,qyp3,p.t1,p.t2,p.t3,
+	//		_n,_bandwidth,_brickLength,_imageWidth,_imageHeight,_boxMin,_boxMax,
+	//		depthdata,scaling,maxcamdistance,
+	//		_tree,_nBranchesUsed,_nLeavesTotal,_nLeavesUsed,_nLeavesQueuedSurface,
+	//		_leafNumberSurface,_leafPos,_leafScale,_queueIndexOfLeaf,_child,_branchNumber
+	//		,_meshCells,_meshCellIndicesBranch,_meshCellIndicesLeaf,_leafParent,_boundary,_performIncrementalMeshing);
+
+	#else
+	transformLoopSimPrecalculatedNeg_subtree(qxp1,qxp2,qxp3,qyp1,qyp2,qyp3,p.t1,p.t2,p.t3,
+			_n,_bandwidth,_brickLength,_imageWidth,_imageHeight,_boxMin,_boxMax,
+			depthdata,NULL,scaling,maxcamdistance,
+			_tree,_nBranchesUsed,_nLeavesTotal,_nLeavesUsed,_nLeavesQueuedSurface,
+			_leafNumberSurface,_leafPos,_leafScale,_queueIndexOfLeaf,_child,_branchNumber,_leafParent,
+			_newBudsSinceMeshingToQueue.subtreeBuds->data(),
+			_newBudsSinceMeshingToQueue.subtreeBudsParentLeaf->data(),
+			_newBudsSinceMeshingToQueue.leafBuds->data(),
+			_numberOfQueuedTreeBuds,_numberOfQueuedLeafBuds,_treeSizeSinceMeshing);
+	eprintf("\n%i new Subtrees and %i new Leaves this Map",
+			_numberOfQueuedTreeBuds,_numberOfQueuedLeafBuds);
+	for(size_t i=0;i<_numberOfQueuedTreeBuds;i++){
+		_newBudsSinceMeshingToAccumulate.subtreeBuds->push_back((*_newBudsSinceMeshingToQueue.subtreeBuds)[i]);
+		_newBudsSinceMeshingToAccumulate.subtreeBudsParentLeaf->push_back((*_newBudsSinceMeshingToQueue.subtreeBudsParentLeaf)[i]);
+	}
+	for(size_t i=0;i<_numberOfQueuedLeafBuds;i++){
+		_newBudsSinceMeshingToAccumulate.leafBuds->push_back((*_newBudsSinceMeshingToQueue.leafBuds)[i]);
+	}
+	_numberOfQueuedTreeBuds = _numberOfQueuedLeafBuds = 0;
+
+	#endif
+
+
+	//	fprintf(stderr,"!");
+	double time2 = (double)cv::getTickCount();
+	//
+	//	fprintf(stderr,"F");
+	//	Frustum frustum(caminfo,depth.cols,depth.rows,FRUSTUM_FAR);
+	//
+	//	float tx = trans.at<double>(0,0);
+	//	float ty = trans.at<double>(2,0);
+	//	float tz = trans.at<double>(2,0);
+	//
+	//	fprintf(stderr,"[%i|%i]",_nLeavesQueuedSurface,_nLeavesQueuedFrustum);
+	//	fprintf(stderr,"!");
+	//
+	//
+	double time3 = (double)cv::getTickCount();
+
+	if(_nLeavesUsed < _nLeavesTotal && _nBranchesUsed < _nBranchesTotal &&
+			(_boxMin.x<0 || _boxMin.y<0 || _boxMin.z<0 || _boxMax.x>=_n || _boxMax.y>=_n || _boxMax.z>=_n)){
+		grow();
+	}
+
+
+	double time4;
+
+
+	_threadValid = false;
+	if(_threaded){
+		distanceUpdateThread->join();
+		delete distanceUpdateThread;
+		time3 = (double)cv::getTickCount();
+		time4 = (double)cv::getTickCount();
+	}
+	else{
+	//		fprintf(stderr, "U");
+		updateWrapperInteger(SDFUpdateParameterInteger(
+				(const ushort*)depthdata,  NULL, scaling, maxcamdistance, (const uchar*)rgb.data,
+				_imageWidth,_imageHeight,
+				m11,m12,m13,m14,m21,m22,m23,m24,m31,m32,m33,m34,
+				pInv.fx,pInv.fy,pInv.cx,pInv.cy,_scale,_distanceThreshold,
+				_leafNumberSurface,_leafPos,_leafScale,
+				_distance,_weights,_color,_brickLength),&_nLeavesQueuedSurface,&_threadValid,0);
+
+		time4 = (double)cv::getTickCount();
+
+	//		fprintf(stderr,"!");
+	}
+
+	if(_nLeavesUsed < _nLeavesTotal && _nBranchesUsed < _nBranchesTotal &&
+			(_boxMin.x<0 || _boxMin.y<0 || _boxMin.z<0 || _boxMax.x>=_n || _boxMax.y>=_n || _boxMax.z>=_n)){
+	}
+
+
+	double time5 = (double)cv::getTickCount();
+
+
+
+	if(_nBranchesUsed > _nBranchesTotal){
+		_performIncrementalMeshing = false;
+		fprintf(stderr,"\nTree is out of Memory by at least %i Branches: %i vs. %i",
+				_nBranchesUsed+1-_nBranchesTotal,_nBranchesUsed,_nBranchesTotal);
+	}
+	if(_nLeavesUsed > _nLeavesTotal){
+		_performIncrementalMeshing = false;
+		fprintf(stderr,"\nTree is out of Memory by at least %i Leaves: %i vs. %i",
+				_nLeavesUsed+1-_nLeavesTotal,_nLeavesUsed,_nLeavesTotal);
+	}
+
+	if(firstMap && _nLeavesUsed != _nLeavesQueuedSurface){
+		fprintf(stderr,"\nNot all allocated Leaves are queued:\n");
+		if(_nLeavesUsed >= _nLeavesTotal){
+			fprintf(stderr,"\nThis is due to the Tree being full.");
+		}
+	}
+
+
+	#ifndef DEBUG_NO_LEAFCELLS
+	if(_performIncrementalMeshing){
+
+	#ifdef SEPARATE_MESHCELL_STRUCTURE
+		//-- Not in use
+		beforeUpdateMeshCellStructure();
+
+		updateMeshCellStructure();
+
+		afterUpdateMeshCellStructure();
+
+	#else
+
+		eprintf("\nPushing Mesh Cell queue");
+		pushMeshCellQueue();
+		eprintf("\nMesh Cell queue pushed");
+	#endif
+
+
+	}
+	#endif
+
+
+	_avgTimeQueueSurface += time2-time1;
+	_avgTimeQueueFrustum += time3-time2;
+	_avgTimeBricksSurface += time4-time3;
+	_avgTimeBricksFrustum += time5-time4;
+	_sumTimeOfAllFrames += time5-time1;
+	_framesAdded++;
+
+	if(_loggingEnabled){
+		_frameStatistics.push_back(FrameStatistic());
+		_frameStatistics.back().leavesQueued = _nLeavesQueuedSurface;
+		_frameStatistics.back().newBranches = _nBranchesUsed-branchesBeforeLastFrame;
+		_frameStatistics.back().newLeaves = _nLeavesUsed-_nLeavesBeforeLastFrame;
+		_frameStatistics.back().newMeshCells = _meshCells.size()-meshCellsBeforeLastFrame;
+		_frameStatistics.back().timeSDFUpdate = time4-time3;
+		_frameStatistics.back().timeTraversal = time2-time1;
+	}
+
+	_averageLeaves += _nLeavesQueuedSurface;
+
+	if((_framesAdded-1)%25==0){
+
+		size_t meshIndicesBranchSize = 0;
+		size_t meshIndicesBranchEmptySize = 0;
+		for(size_t i=0;i<_meshCellIndicesBranch.size();i++){
+	#ifdef BRANCHNEIGHBORHOOD_REFERECE
+			if(_meshCellIndicesBranch[i]) meshIndicesBranchSize += _meshCellIndicesBranch[i]->size();
+	#else
+			meshIndicesBranchSize += _meshCellIndicesBranch[i].size();
+	#endif
+			meshIndicesBranchEmptySize += sizeof(_meshCellIndicesBranch[i]);
+		}
+
+		eprintf("\nMesh Cell Indices Branch use %li Bytes, and %li Bytes empty\n",
+				meshIndicesBranchSize,meshIndicesBranchEmptySize);
+		eprintf("\nSize of a Mesh Cell: %li = %li + %li + 4*%li + 16*%li",sizeof(MeshCell),
+				sizeof(int),sizeof(MeshInterleaved*),sizeof(sidetype),sizeof(volumetype));
+		eprintf("\nSize of all Mesh Cells: %li * %li = %li",_meshCells.capacity(),sizeof(MeshCell),_meshCells.capacity()*sizeof(MeshCell));
+
+		eprintf("\nEmpty Size of a Mesh: %li, empty Size of all Meshes %li * %li = %li",
+				sizeof(MeshInterleaved),_meshCells.size(),sizeof(MeshInterleaved),_meshCells.size()*sizeof(MeshInterleaved));
+		eprintf("\nMesh Cell Indices Leaf use %li Bytes",_meshCellIndicesLeaf.capacity()*sizeof(LeafNeighborhood));
+
+		size_t verticesSize = 0;
+		size_t facesSize = 0;
+		size_t colorsSize = 0;
+		for(size_t i=0;i<_meshCells.size();i++){
+			verticesSize += _meshCells[i].meshinterleaved->vertices.size();
+			facesSize += _meshCells[i].meshinterleaved->faces.size();
+			colorsSize += _meshCells[i].meshinterleaved->colors.size();
+		}
+		verticesSize *= sizeof(Vertex3f);
+		facesSize *= sizeof(unsigned int);
+		colorsSize *= sizeof(Color3b);
+		eprintf("\nMeshesSize: Vertices: %li , Faces: %li , Color: %li",
+				verticesSize,facesSize,colorsSize);
+	}
+	return _nLeavesQueuedSurface;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
