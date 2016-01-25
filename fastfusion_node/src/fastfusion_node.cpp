@@ -169,6 +169,7 @@ FastFusionWrapper::FastFusionWrapper():  nodeLocal_("~") {
 	} else {
 		ROS_ERROR("\nFastfusion: Could not read parameters, abort.\n");
 	}
+	frameCounter_ = 0;
 	while (!onlinefusion_.isSetup()){
 		//-- Waiting for onlinefusion to be setup
 	}
@@ -200,7 +201,7 @@ void FastFusionWrapper::run() {
 			//-- Synchronizer for point cloud and noise image
 			subscriberPointCloud_ = new message_filters::Subscriber<sensor_msgs::PointCloud2>;
 			subscriberPointCloud_->subscribe(node_,node_.resolveName("point_cloud"),5);
-			syncPointCloud_ = new message_filters::TimeSynchronizer<sensor_msgs::PointCloud2, sensor_msgs::Image>(*subscriberPointCloud_, *subscriberDepth_,5);
+			syncPointCloud_ = new message_filters::TimeSynchronizer<sensor_msgs::PointCloud2, sensor_msgs::Image>(*subscriberPointCloud_, *subscriberNoise_,5);
 			syncPointCloud_->registerCallback(boost::bind(&FastFusionWrapper::pclCallbackPico, this,  _1,  _2));
 		} else {
 			sync_ = new message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> >
@@ -224,7 +225,7 @@ void FastFusionWrapper::run() {
 	}
 
 	ros::Subscriber subscriberPCL = node_.subscribe<sensor_msgs::PointCloud2> ("/picoflexx/cam0/pcl", 5, &FastFusionWrapper::pclCallback,this);
-	ros::Duration(0.1).sleep();
+	ros::Duration(5).sleep();
 	std::cout << "Start Spinning" << std::endl;
 	ros::spin();
 	//-- Stop the fusion process
@@ -232,6 +233,30 @@ void FastFusionWrapper::run() {
 	pcl::io::savePLYFile ("/home/karrer/PointCloudImg.ply", pointCloudFrameTrans_, false);
 	ros::shutdown();
 }
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+// Debugging
+double interpolate( double val, double y0, double x0, double y1, double x1 ) {
+    return (val-x0)*(y1-y0)/(x1-x0) + y0;
+}
+
+double colorMapBase( double val ) {
+    if ( val <= -0.75 ) return 0;
+    else if ( val <= -0.25 ) return interpolate( val, 0.0, -0.75, 1.0, -0.25 );
+    else if ( val <= 0.25 ) return 1.0;
+    else if ( val <= 0.75 ) return interpolate( val, 1.0, 0.25, 0.0, 0.75 );
+    else return 0.0;
+}
+
+double colorMapRed(double value) {
+    return colorMapBase(value - 0.5 );
+}
+double colorMapGreen(double value) {
+    return colorMapBase(value);
+}
+double colorMapBlue(double value) {
+    return colorMapBase(value + 0.5 );
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void FastFusionWrapper::pclCallbackPico(const sensor_msgs::PointCloud2ConstPtr& msgPtCloud,
 										const sensor_msgs::ImageConstPtr& msgNoise) {
@@ -241,7 +266,7 @@ void FastFusionWrapper::pclCallbackPico(const sensor_msgs::PointCloud2ConstPtr& 
 	ros::Time timestamp = msgPtCloud->header.stamp;
 
 	//-- Reject Data if too little time since last frame
-	if ((timestamp - previous_ts_).toSec() <= 0.05){
+	if ((timestamp - previous_ts_).toSec() <= 1.0){
 		return;
 	}
 	previous_ts_ = timestamp;
@@ -254,13 +279,13 @@ void FastFusionWrapper::pclCallbackPico(const sensor_msgs::PointCloud2ConstPtr& 
 	pcl::PointCloud<pcl::PointXYZ>::Ptr ptCloud(new pcl::PointCloud<pcl::PointXYZ> ());
 	pcl::fromROSMsg (*msgPtCloud,*ptCloud);
 	getNoiseImageFromRosMsg(msgNoise, &imgNoiseDist);
-
+	ros::Time beforeNormal = ros::Time::now();
 	//-- Compute Image Normals (via integral images)
 	pcl::PointCloud<pcl::Normal>::Ptr ptCloudNormals (new pcl::PointCloud<pcl::Normal>);
 	pcl::IntegralImageNormalEstimation<pcl::PointXYZ, pcl::Normal> normalEstimator;
 	normalEstimator.setNormalEstimationMethod (normalEstimator.COVARIANCE_MATRIX);	// Use Covariance Matrix method for normal estimation
 	normalEstimator.setMaxDepthChangeFactor(0.02f);
-	normalEstimator.setNormalSmoothingSize(10.0f);
+	normalEstimator.setNormalSmoothingSize(3.0f);
 	normalEstimator.setInputCloud(ptCloud);
 	normalEstimator.compute(*ptCloudNormals);
 
@@ -269,6 +294,15 @@ void FastFusionWrapper::pclCallbackPico(const sensor_msgs::PointCloud2ConstPtr& 
 	ptCloudCol->height = ptCloud->height;
 	ptCloudCol->width = ptCloud->width;
 	ptCloudCol->points.resize (ptCloud->width * ptCloud->height);
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// DEBUGGING
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr ptCloudDeb(new pcl::PointCloud<pcl::PointXYZRGB>());
+	ptCloudDeb->height = ptCloud->height;
+	ptCloudDeb->width = ptCloud->width;
+	ptCloudDeb->points.resize (ptCloud->width * ptCloud->height);
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////
+	cv::Mat depthImg(ptCloud->height, ptCloud->width, CV_16UC1);
+	cv::Mat curvImg(ptCloud->height, ptCloud->width, CV_16UC1);
 	uint8_t r = 200, g = 200, b = 200;    // Example: Red color
 	uint32_t rgb = ((uint32_t)r << 16 | (uint32_t)g << 8 | (uint32_t)b);
 	float rgbF = *reinterpret_cast<float*>(&rgb);
@@ -281,6 +315,34 @@ void FastFusionWrapper::pclCallbackPico(const sensor_msgs::PointCloud2ConstPtr& 
 		ptCloudCol->points[i].normal_y = ptCloudNormals->points[i].normal_y;
 		ptCloudCol->points[i].normal_z = ptCloudNormals->points[i].normal_z;
 		ptCloudCol->points[i].curvature = ptCloudNormals->points[i].curvature;
+		///////////////////////////////////////////////////////////////////////////////////////////
+		// DEBUGGING
+		ptCloudDeb->points[i].x = ptCloud->points[i].x;
+		ptCloudDeb->points[i].y = ptCloud->points[i].y;
+		ptCloudDeb->points[i].z = ptCloud->points[i].z;
+		int u, v;
+		u = i%224;
+		v = i/224;
+		double distance;
+		if (imgNoiseDist.at<float>(v,u) > 0.07){
+			distance = 0.07;
+		} else {
+			distance =  imgNoiseDist.at<float>(v,u);
+		}
+		//std::cout << "distance = " << distance << ", noise: "<< imgNoiseDist.at<double>(v,u) << std::endl;
+		//-- Convert Distance to value between 0 and 1
+		double value = distance * (2.0/0.07) -1.0;
+		depthImg.at<unsigned short>(v,u) = (unsigned short)(ptCloud->points[i].z*5000.0f);
+		curvImg.at<unsigned short>(v,u) = (unsigned short)(ptCloudNormals->points[i].curvature*65000.0f);
+		//-- Convert Value to RGB (with values between 0 and 1)
+		double r_d = colorMapRed(value);
+		double g_d = colorMapGreen(value);
+		double b_d = colorMapBlue(value);
+		//-- Convert RGB values to unsigned 8bit integers
+		ptCloudDeb->points[i].r = (uint8_t) (r_d*255);
+		ptCloudDeb->points[i].g = (uint8_t) (g_d*255);
+		ptCloudDeb->points[i].b = (uint8_t) (b_d*255);
+		/////////////////////////////////////////////////////////////////////////////////////////////////
 	}
 
 	//-- Get Pose (tf-listener)
@@ -297,13 +359,35 @@ void FastFusionWrapper::pclCallbackPico(const sensor_msgs::PointCloud2ConstPtr& 
 		ros::Duration(1.0).sleep();
 		return;
 	}
-
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// DEBUGGING
+	Eigen::Quaterniond q;
+	Eigen::Matrix3d R;
+	Eigen::Vector3d c;
+	tf::vectorTFToEigen(transform.getOrigin(), c);
+	//c = R_depth_cam0.transpose()*( R_cam0_imu.transpose()*(c_temp - t_cam0_imu)-t_depth_cam0);
+	tf::quaternionTFToEigen(transform.getRotation(), q);
+	R = q.toRotationMatrix();
+	Eigen::Matrix4d transformMat = Eigen::Matrix4d::Identity();
+	transformMat(0,0) = R(0,0); transformMat(0,1) = R(0,1); transformMat(0,2) = R(0,2); transformMat(0,3) = c(0);
+	transformMat(1,0) = R(1,0); transformMat(1,1) = R(1,1); transformMat(1,2) = R(1,2); transformMat(1,3) = c(1);
+	transformMat(2,0) = R(2,0); transformMat(2,1) = R(2,1); transformMat(2,2) = R(2,2); transformMat(2,3) = c(2);
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr ptCloudDebTrans (new pcl::PointCloud<pcl::PointXYZRGB>());
+	pcl::transformPointCloud (*ptCloudDeb, *ptCloudDebTrans, transformMat);
+	std::string name = "/home/karrer/Dropbox/ETH/Master_Studies/MasterThesis/2. Meetings/2016_Jan_21/MeshPico2/colNoiseCloud" + boost::to_string(frameCounter_) + ".ply";
+	std::string name2 = "/home/karrer/Dropbox/ETH/Master_Studies/MasterThesis/2. Meetings/2016_Jan_21/MeshPico2/depthImg" + boost::to_string(frameCounter_) + ".png";
+	std::string name3 = "/home/karrer/Dropbox/ETH/Master_Studies/MasterThesis/2. Meetings/2016_Jan_21/MeshPico2/curvImg" + boost::to_string(frameCounter_) + ".png";
+	frameCounter_++;
+	pcl::io::savePLYFile(name,*ptCloudCol);
+	cv::imwrite(name2,depthImg);
+	cv::imwrite(name3,curvImg);
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//-- Convert tf to CameraInfo (fastfusion Class in camerautils.hpp)
 	CameraInfo incomingFramePose;
 	incomingFramePose = convertTFtoCameraInfo(transform);
 
 	//-- Push the Point Cloud into the fusion framework
-	onlinefusion_.updateFusion(*ptCloudCol, imgNoiseDist,incomingFramePose);
+	//onlinefusion_.updateFusion(*ptCloudCol, imgNoiseDist,incomingFramePose);
 }
 
 

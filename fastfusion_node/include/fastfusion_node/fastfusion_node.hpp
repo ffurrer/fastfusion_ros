@@ -8,7 +8,8 @@
 #ifndef INCLUDE_FASTFUSION_NODE_HPP_
 #define INCLUDE_FASTFUSION_NODE_HPP_
 
-
+#include <string>
+#include <sstream>
 #include <ros/ros.h>
 #include <image_transport/image_transport.h>
 #include "camerautils/camerautils.hpp"
@@ -26,6 +27,7 @@
 #include <message_filters/sync_policies/approximate_time.h>
 #include <pcl/io/ply_io.h>
 #include <pcl/features/integral_image_normal.h>
+#include <vector>
 
 class FastFusionWrapper {
 public:
@@ -61,7 +63,10 @@ protected:
 
 	//-- Interface to fastfusion framework
 	OnlineFusionROS onlinefusion_;
-
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// DEBUGGING
+	int frameCounter_;
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//-- Subscribers
 	message_filters::Subscriber<sensor_msgs::Image> *subscriberRGB_;
 	message_filters::Subscriber<sensor_msgs::Image> *subscriberDepth_;
