@@ -356,17 +356,17 @@ void OnlineFusionROS::visualize() {
     	//-- Check if point cloud should be updated
     	if(_update) {
     		//-- Update Viewer
-    		pcl::PointCloud<pcl::PointXYZRGB> points = _fusion->getCurrentPointCloud();
-    		pcl::PointCloud<pcl::PointXYZRGB>::Ptr points_ptr (new pcl::PointCloud<pcl::PointXYZRGB>(points));
+    		pcl::PointCloud<pcl::PointXYZ> points = _fusion->getCurrentPointCloud();
+    		pcl::PointCloud<pcl::PointXYZ>::Ptr points_ptr (new pcl::PointCloud<pcl::PointXYZ>(points));
     		std::cout << "There are: " << points_ptr->size() << " Points in the model" << std::endl;
     		if (points_ptr->points.size() > 0) {
 				//-- KdTree for NN-search
 				/*
 				std::clock_t begin = std::clock();
-				pcl::search::KdTree<pcl::PointXYZRGB> kdtree;
+				pcl::search::KdTree<pcl::PointXYZ> kdtree;
 				kdtree.setInputCloud (points_ptr);
 				//-- Search nearest Point
-				pcl::PointXYZRGB searchPoint;
+				pcl::PointXYZ searchPoint;
 				searchPoint.x = 1.0; searchPoint.y = 2.1; searchPoint.z = 0; searchPoint.r = 1; searchPoint.g = 0; searchPoint.b = 0;
 				std::vector<int> pointIdxNKNSearch(5);
 				std::vector<float> pointNKNSquaredDistance(5);

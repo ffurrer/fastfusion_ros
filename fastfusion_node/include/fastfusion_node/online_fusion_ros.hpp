@@ -118,7 +118,7 @@ public:
 	void updateFusion(cv::Mat &rgbImg, cv::Mat &depthImg, cv::Mat &noiseImg,CameraInfo &pose, double time, double decayTime, ros::Time timestamp);
 
 	//-- Get the current point cloud (vertices of the current mesh)
-	pcl::PointCloud<pcl::PointXYZRGB> getCurrentPointCloud() {
+	pcl::PointCloud<pcl::PointXYZ> getCurrentPointCloud() {
 		return _fusion->getCurrentPointCloud();
 	};
 

@@ -3010,7 +3010,7 @@ void meshWrapperInterleaved
 		volatile int *meshingDone,
 		MeshInterleaved *mesh,
 		//std::vector<FusionMipMapCPU::MeshStatistic> *meshTimes,
-		pcl::PointCloud<pcl::PointXYZRGB>::Ptr currentPointCloud
+		pcl::PointCloud<pcl::PointXYZ>::Ptr currentPointCloud
 )
 {
 	std::cout << "MeshWrapper!!" << std::endl;
@@ -3046,8 +3046,8 @@ void meshWrapperInterleaved
 	mesh->vertices.reserve(numVerticesTotal);
 	mesh->colors.reserve(numVerticesTotal);
 	mesh->faces.reserve(numFacesTotal);
-	currentPointCloud = boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB> >(new pcl::PointCloud<pcl::PointXYZRGB> ());
-	pcl::PointXYZRGB tempPoint;
+	currentPointCloud = boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ> >(new pcl::PointCloud<pcl::PointXYZ> ());
+	pcl::PointXYZ tempPoint;
 	unsigned int meshSize = 0;
 	eprintf("\nSumming up %li Mesh Cells...",meshcellsSize);
 	for(size_t i=0;i<meshcellsSize;i++){
@@ -3125,12 +3125,12 @@ void FusionMipMapCPU::meshWrapperInterleaved(void)
 	_meshNext->vertices.reserve(numVerticesTotal);
 	_meshNext->colors.reserve(numVerticesTotal);
 	_meshNext->faces.reserve(numFacesTotal);
-	pcl::PointXYZRGB tempPoint;
+	pcl::PointXYZ tempPoint;
 	unsigned int meshSize = 0;
 	eprintf("\nSumming up %li Mesh Cells...",meshcellsSize);
 	{ // Mutex Scope
 	std::lock_guard<std::mutex> updateLock(_pointCloudUpdate);
-	_currentPointCloud = boost::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB> >(new pcl::PointCloud<pcl::PointXYZRGB> ());
+	_currentPointCloud = boost::shared_ptr<pcl::PointCloud<pcl::PointXYZ> >(new pcl::PointCloud<pcl::PointXYZ> ());
 	_pclPointCloudInitialized = true;
 	for(size_t i=0;i<meshcellsSize;i++){
 //		fprintf(stderr," %li",i);
@@ -3140,9 +3140,9 @@ void FusionMipMapCPU::meshWrapperInterleaved(void)
 			tempPoint.x = _meshCellsCopy[i].meshinterleaved->vertices[j].x;
 			tempPoint.y = _meshCellsCopy[i].meshinterleaved->vertices[j].y;
 			tempPoint.z = _meshCellsCopy[i].meshinterleaved->vertices[j].z;
-			tempPoint.r = _meshCellsCopy[i].meshinterleaved->colors[j].r;
-			tempPoint.g = _meshCellsCopy[i].meshinterleaved->colors[j].g;
-			tempPoint.b = _meshCellsCopy[i].meshinterleaved->colors[j].b;
+//			tempPoint.r = _meshCellsCopy[i].meshinterleaved->colors[j].r;
+//			tempPoint.g = _meshCellsCopy[i].meshinterleaved->colors[j].g;
+//			tempPoint.b = _meshCellsCopy[i].meshinterleaved->colors[j].b;
 			_currentPointCloud->push_back(tempPoint);
 
 		}
@@ -3242,12 +3242,12 @@ bool FusionMipMapCPU::updateMeshes()
 
 }
 
-pcl::PointCloud<pcl::PointXYZRGB> FusionMipMapCPU::getCurrentPointCloud(void) {
+pcl::PointCloud<pcl::PointXYZ> FusionMipMapCPU::getCurrentPointCloud(void) {
 	if (_pclPointCloudInitialized){
 	std::lock_guard<std::mutex> updateLock(_pointCloudUpdate);
 	return *_currentPointCloud;
 	} else {
-		pcl::PointCloud<pcl::PointXYZRGB>::Ptr tmp (new pcl::PointCloud<pcl::PointXYZRGB>);
+		pcl::PointCloud<pcl::PointXYZ>::Ptr tmp (new pcl::PointCloud<pcl::PointXYZ>);
 		return *tmp;
 	}
 }

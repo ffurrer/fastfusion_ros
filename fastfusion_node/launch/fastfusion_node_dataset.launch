@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="ISO-8859-15"?>
 <launch>
-	<arg name="slam_name" value="/picoflexx/cam0"/>
+	<arg name="slam_name" value="camera"/>
 	
 	<!-- Run Bagfile -->
-     <node pkg="rosbag" type="play" name="player" output="screen"   
-      args="-r 2.0 /home/karrer/Desktop/Dataset3/2016_Jan_09/Picoflexx/Desk/Mode1/desk_mode1_run4.bag" />
+     <node pkg="rosbag" type="play" name="player"    
+      args="--clock --r 1.0 /home/johnny/rosbag_2016/realsense_bagfiles/_2016-04-14-21-19-37.bag" />
  
 	<!-- Run rovio -->
      <!--node  name="rovio" pkg="rovio" type="test_rovio"     
@@ -13,13 +13,12 @@
 
 	<!-- Run fastfusion_node-->
 	<node  name="fastfusion_node" pkg="fastfusion_node" type="fastfusion_node" clear_params="true" output="screen">
-		<!--remap from="image_rgb"			to="$(arg slam_name)/color/image_raw" -->
+		<remap from="image_rgb"			to="$(arg slam_name)/rgb/image_raw" />
 		<remap from="image_depth"		to="$(arg slam_name)/depth/image_raw" />
-		<remap from="image_conf"		to="$(arg slam_name)/confidence/image_raw" />
-		<remap from="image_noise" 		to="$(arg slam_name)/noise/image_raw" />
+		<remap from="point_cloud" 	to="$(arg slam_name)/depth/points" />
 	<!-- Load parameters -->
  	<rosparam file="$(find fastfusion_node)/cfg/params.yaml"/> 
-	<rosparam file="$(find fastfusion_node)/cfg/camchain_pico.yaml"/>
+	<rosparam file="$(find fastfusion_node)/cfg/camchain_realsense.yaml"/>
 	</node>
 	
 	

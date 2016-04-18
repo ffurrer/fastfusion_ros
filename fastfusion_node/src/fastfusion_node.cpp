@@ -220,13 +220,14 @@ void FastFusionWrapper::run() {
 	}
 
 	//-- Point Cloud publisher (only used for time window based reconstruction
-	ros::Publisher output_pub_ = node_.advertise<pcl::PointCloud<pcl::PointXYZRGB> > ("fastfusion/pointCloud", 100);
+	ros::Publisher output_pub_ = node_.advertise<pcl::PointCloud<pcl::PointXYZ> > ("fastfusion/pointCloud", 100);
 	frameCounter_ = 0;
 	ros::Duration(1.5).sleep();
 	ros::Rate r(50);
 	bool halted = true;
 	while (ros::ok()) {
-		bool loadSuccess = node_.getParam("runMapping", runMapping_);
+	  bool loadSuccess = node_.getParam("runMapping", runMapping_);
+
 		if (!loadSuccess) {
 			//-- If no parameter could be found assume the mapping should be run
 			runMapping_ = true;
@@ -243,8 +244,8 @@ void FastFusionWrapper::run() {
 		}
 		//-- Publish the current point cloud
 		if ((frameCounter_ > 8) && (runMapping_) && decayTime_ >0.0 ){
-			pcl::PointCloud<pcl::PointXYZRGB> cloud = onlinefusion_.getCurrentPointCloud();
-			cloud.header.frame_id = "/world";
+			pcl::PointCloud<pcl::PointXYZ> cloud = onlinefusion_.getCurrentPointCloud();
+			cloud.header.frame_id = "/vicon";
 			ros::Time stamp = ros::Time::now();
 			cloud.header.stamp = pcl_conversions::toPCL(stamp);
 			output_pub_.publish(cloud.makeShared());
@@ -462,7 +463,7 @@ void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud
 	if (((pcl_msg->header.stamp - previous_ts_).toSec() <= 0.01) || !runMapping_){
 		return;
 	}
-	pcl::PointCloud<pcl::PointXYZRGB>  pcl_cloud;
+	pcl::PointCloud<pcl::PointXYZ>  pcl_cloud;
 	pcl::fromROSMsg (*pcl_msg,pcl_cloud);
 
 	//-- Create RGB and Depth image from point cloud
@@ -476,9 +477,9 @@ void FastFusionWrapper::registerPointCloudCallback(const sensor_msgs::PointCloud
 		for (unsigned int u = 0; u < width; u++) {
 			indexRGB = 3*(width*v + u);
 			indexDepth = width*v + u;
-			imgRGB.data[indexRGB + 0] = pcl_cloud.points[indexDepth].b;
-			imgRGB.data[indexRGB + 1] = pcl_cloud.points[indexDepth].g;
-			imgRGB.data[indexRGB + 2] = pcl_cloud.points[indexDepth].r;
+//			imgRGB.data[indexRGB + 0] = pcl_cloud.points[indexDepth].b;
+//			imgRGB.data[indexRGB + 1] = pcl_cloud.points[indexDepth].g;
+//			imgRGB.data[indexRGB + 2] = pcl_cloud.points[indexDepth].r;
 			if (pcl_cloud.points[indexDepth].z > 0) {
 				imgDepth.at<unsigned short>(v,u) = (unsigned short)(pcl_cloud.points[indexDepth].z*1000.0f);
 			} else {
@@ -597,8 +598,7 @@ void FastFusionWrapper::broadcastTFchain(ros::Time timestamp) {
 		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, tracker_id_, "cam0"));
 		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_depth_cam0, timestamp, "cam0", cam_id_));
 	} else {
-		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_cam0_imu, timestamp, tracker_id_, "cam0"));
-		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_rgb_cam0, timestamp, "cam0", cam_id_));
+		tfBroadcaster_.sendTransform(tf::StampedTransform(tf_body_cam, timestamp, tracker_id_, cam_id_));
 	}
 }
 

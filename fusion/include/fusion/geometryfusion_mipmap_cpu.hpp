@@ -141,7 +141,7 @@ public:
 			std::vector<cv::Mat> rgbImages, volatile long int *poseNumber = NULL);
 
 	//-- Return current point cloud (vertices of the mesh)
-	pcl::PointCloud<pcl::PointXYZRGB> getCurrentPointCloud();
+	pcl::PointCloud<pcl::PointXYZ> getCurrentPointCloud();
 
 	//-- Meshing Methods
 	MeshSeparate getMeshSeparateMarchingCubes(MeshSeparate mesh = MeshSeparate(3));
@@ -479,7 +479,7 @@ protected:
 	ParentArray _leafParentCopy;
 	int _meshingDone;
 	MeshSeparate *_meshSeparateCurrent;
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr _currentPointCloud;
+	pcl::PointCloud<pcl::PointXYZ>::Ptr _currentPointCloud;
 	bool _pclPointCloudInitialized;
 	MeshSeparate *_meshSeparateNext;
 	MeshInterleaved *_meshCurrent;
