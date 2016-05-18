@@ -16,11 +16,11 @@ distanceThreshold : 0.03
 
 # Mesh Saving (location + desired Name without ending)
 saveMesh : true
-fileLocation : /home/johnny/projects/3D_semantics/data
+fileLocation : /home/johnny/projects/3D_semantics/data/mesh
 
 # TF Id's
-world_id : /vicon
-tracker_id : /realsense_cross
+world_id : /world
+tracker_id : vicon/realsense_cross/realsense_cross
 cam_id : /camera_link
 
 # Use time-window based reconstruction

@@ -245,7 +245,7 @@ void FastFusionWrapper::run() {
 		//-- Publish the current point cloud
 		if ((frameCounter_ > 8) && (runMapping_) && decayTime_ >0.0 ){
 			pcl::PointCloud<pcl::PointXYZ> cloud = onlinefusion_.getCurrentPointCloud();
-			cloud.header.frame_id = "/vicon";
+			cloud.header.frame_id = "/world";
 			ros::Time stamp = ros::Time::now();
 			cloud.header.stamp = pcl_conversions::toPCL(stamp);
 			output_pub_.publish(cloud.makeShared());

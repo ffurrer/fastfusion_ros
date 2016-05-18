@@ -10,7 +10,7 @@
 
 	<!-- Load parameters -->
  	<rosparam file="$(find fastfusion_node)/cfg/params.yaml"/> 
-	<rosparam file="$(find fastfusion_node)/cfg/camchain_realsense.yaml"/>
+	<rosparam file="$(find fastfusion_node)/cfg/camchain_realsenseSR300.yaml"/>
 	</node>
 	
 	<!--node pkg="rosbag" type="play" name="player" output="screen"   
